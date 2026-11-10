@@ -156,12 +156,16 @@ class AlphaPool(AlphaPoolBase):
         return best_weights
 
     def test_ensemble(self, data: StockData, target: Expression) -> Tuple[float, float]:
+        return self.evaluate_weighted_pool(self.exprs[:self.size], self.weights[:self.size], data, target)  # type: ignore
+
+    @classmethod
+    def evaluate_weighted_pool(cls, exprs: List[Expression], weights: np.ndarray,
+                               data: StockData, target: Expression) -> Tuple[float, float]:
         with torch.no_grad():
             factors: List[Tensor] = []
-            for i in range(self.size):
-                factor = self._normalize_by_day(self.exprs[i].evaluate(data))   # type: ignore
-                weighted_factor = factor * self.weights[i]
-                factors.append(weighted_factor)
+            for expr, weight in zip(exprs, weights):
+                factor = cls._normalize_by_day(expr.evaluate(data))
+                factors.append(factor * weight)
             combined_factor: Tensor = sum(factors)  # type: ignore
             target_factor = target.evaluate(data)
 

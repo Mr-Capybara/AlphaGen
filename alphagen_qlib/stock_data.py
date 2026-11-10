@@ -1,3 +1,4 @@
+import os
 from typing import List, Union, Optional, Tuple
 from enum import IntEnum
 import numpy as np
@@ -24,7 +25,8 @@ class StockData:
                  max_backtrack_days: int = 100,
                  max_future_days: int = 30,
                  features: Optional[List[FeatureType]] = None,
-                 device: torch.device = torch.device('cuda:0')) -> None:
+                 device: torch.device = torch.device('cuda:0'),
+                 label_horizon: int = 0) -> None:
         self._init_qlib()
 
         self._instrument = instrument
@@ -32,6 +34,7 @@ class StockData:
         self.max_future_days = max_future_days
         self._start_time = start_time
         self._end_time = end_time
+        self._label_horizon = label_horizon
         self._features = features if features is not None else list(FeatureType)
         self.device = device
         self.data, self._dates, self._stock_ids = self._get_data()
@@ -42,7 +45,8 @@ class StockData:
             return
         import qlib
         from qlib.config import REG_CN
-        qlib.init(provider_uri="~/.qlib/qlib_data/cn_data", region=REG_CN)
+        provider_uri = os.environ.get("ALPHAGEN_QLIB_DIR", "~/.qlib/qlib_data/cn_data")
+        qlib.init(provider_uri=os.path.expanduser(provider_uri), region=REG_CN, kernels=1)
         cls._qlib_initialized = True
 
     def _load_exprs(self, exprs: Union[str, List[str]]) -> pd.DataFrame:
@@ -54,10 +58,13 @@ class StockData:
             exprs = [exprs]
         cal: np.ndarray = D.calendar()
         start_index = cal.searchsorted(pd.Timestamp(self._start_time))  # type: ignore
-        end_index = cal.searchsorted(pd.Timestamp(self._end_time))  # type: ignore
+        # Keep each forward label used for fitting or selection within its split.
+        end_index = cal.searchsorted(pd.Timestamp(self._end_time), side='right') - 1 - self._label_horizon
+        if start_index < self.max_backtrack_days or end_index + self.max_future_days >= len(cal):
+            raise ValueError(f'Calendar lacks padding for {self._start_time} to {self._end_time}')
+        if end_index < start_index:
+            raise ValueError(f'No usable days in {self._start_time} to {self._end_time}')
         real_start_time = cal[start_index - self.max_backtrack_days]
-        if cal[end_index] != pd.Timestamp(self._end_time):
-            end_index -= 1
         real_end_time = cal[end_index + self.max_future_days]
         return (QlibDataLoader(config=exprs)  # type: ignore
                 .load(self._instrument, real_start_time, real_end_time))

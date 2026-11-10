@@ -1,0 +1,12 @@
+{
+  "qlib_dir": "data/tushare-csi300",
+  "snapshot_manifest_sha256": "da20f709b1c37e1c9b75a5a37339e4dad57a6e30e777be78dfdbcfcb16b6bab1",
+  "device": "cpu",
+  "seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  "training_steps": {
+    "10": 250000,
+    "20": 300000,
+    "50": 350000,
+    "100": 400000
+  }
+}
